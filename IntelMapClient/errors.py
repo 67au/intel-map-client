@@ -1,4 +1,4 @@
-class Error(RuntimeError):
+class Error(Exception):
     pass
 
 
