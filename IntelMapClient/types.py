@@ -1,5 +1,6 @@
 from datetime import datetime
-from itertools import groupby, compress
+from itertools import groupby, compress, chain
+from operator import attrgetter
 from typing import List, Union, Optional
 
 from IntelMapClient.utils import datetime2timestamp_ms, timestamp_ms2datetime
@@ -10,6 +11,7 @@ class Entity:
     def __init__(self):
         self.guid: Optional[str] = None
         self._time: Optional[datetime] = None
+        self._team: Optional[str] = None
 
     @property
     def timestampMs(self) -> int:
@@ -19,6 +21,10 @@ class Entity:
     def time(self) -> datetime:
         return self._time
 
+    @property
+    def team(self) -> str:
+        return {'E': 'Enlightened', 'R': 'Resistance', 'N': 'Neutralized'}[self._team]
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.guid}, {self._time})'
 
@@ -27,32 +33,37 @@ class Tile:
 
     def __init__(self, name: str, gameEntities: List[Union['Portal', 'Link', 'Field']]):
         self.name = name
-        self.gameEntities = gameEntities
-        self._groups = {k: list(g) for k, g in groupby(self.gameEntities, key=lambda k: k.__class__)}
+        gameEntities.sort(key=attrgetter('type'))
+        self._groups = {k: list(v) for k, v in (groupby(gameEntities, key=attrgetter('type')))}
+
+    @property
+    def gameEntities(self) -> List[Union['Portal', 'Link', 'Field']]:
+        return list(chain(self.portals, self.links, self.fields))
 
     @property
     def portals(self) -> List['Portal']:
-        return self._groups.get(Portal, [])
+        return self._groups.get('p', [])
 
     @property
     def links(self) -> List['Link']:
-        return self._groups.get(Link, [])
+        return self._groups.get('e', [])
 
     @property
     def fields(self) -> List['Field']:
-        return self._groups.get(Field, [])
+        return self._groups.get('r', [])
 
 
 class Portal(Entity):
 
     def __init__(self, guid: str, type_: str, team: str, latE6: int, lngE6: int, level: int, health: int, resCount: int,
                  image: str, title: str, ornaments: list, mission: bool, mission50plus: bool, artifactBrief: list,
-                 timestampMs: int, mods: list, resonators: list, owner: str, artifactDetail: list, *unknown):
+                 timestampMs: int, mods: list = None, resonators: list = None, owner: str = None,
+                 artifactDetail: list = None, *unknown):
         super().__init__()
         self.guid = guid
         self.type = type_
         self._time = timestamp_ms2datetime(timestampMs)
-        self.team = team
+        self._team = team
         self.latE6 = latE6
         self.lngE6 = lngE6
         self.level = level
@@ -91,7 +102,7 @@ class Link(Entity):
         self.guid = guid
         self._time = timestamp_ms2datetime(timestampMs)
         self.type = type_
-        self.team = team
+        self._team = team
         self.p1_guid = p1_guid
         self.p1_latE6 = p1_latE6
         self.p1_lngE6 = p1_lngE6
@@ -120,7 +131,7 @@ class Field(Entity):
         self.guid = guid
         self._time = timestamp_ms2datetime(timestampMs)
         self.type = type_
-        self.team = team
+        self._team = team
         self.p1_guid = p1_guid
         self.p1_latE6 = p1_latE6
         self.p1_lngE6 = p1_lngE6
@@ -145,7 +156,7 @@ class Plext(Entity):
         self.guid = guid
         self._time = timestamp_ms2datetime(timestampMs)
         self.text = plext['plext'].get('text')
-        self.team = plext['plext'].get('team')
+        self._team = plext['plext'].get('team')
         self.markup = plext['plext'].get('markup')
         self.plextType = plext['plext'].get('plextType')
         self.categories = plext['plext'].get('categories')

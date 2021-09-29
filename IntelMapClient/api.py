@@ -69,7 +69,7 @@ class AsyncAPI:
         for _ in iter(lambda: max_retries > 0, False):
             try:
                 result = await client.getPortalDetails(guid=guid)
-                return cls.parseGameEntities([guid, None, result])
+                return cls.parseGameEntities(guid, -1, result)
             except RequestError:
                 max_retries -= 1
                 t = random.randint(2, 4)
@@ -96,9 +96,8 @@ class AsyncAPI:
             for task in asyncio.as_completed(tasks):
                 for k, v in (await task)['map'].items():
                     if 'gameEntities' in v:
-                        tile_output.append(
-                            Tile(name=k, gameEntities=[cls.parseGameEntities(_) for _ in v['gameEntities']])
-                        )
+                        entities = [cls.parseGameEntities(*i) for i in v['gameEntities']]
+                        tile_output.append(Tile(name=k, gameEntities=entities))
                     else:
                         todo.append(k)
         if any(todo):
@@ -149,14 +148,26 @@ class AsyncAPI:
         return Plext(*arr)
 
     @staticmethod
-    def parseGameEntities(arr: list) -> Union['Portal', 'Link', 'Field']:
-        if arr[2][0] == 'p':  # Portal
-            if len(arr[2]) == 14:
-                return Portal(arr[0], *arr[2], None, None, None, None)  # type: ignore
-            return Portal(arr[0], *arr[2])
-        elif arr[2][0] == 'e':  # Link
-            return Link(arr[0], arr[1], *arr[2])
-        elif arr[2][0] == 'r':  # Field
-            return Field(arr[0], arr[1], *arr[2][:2], *(_ for __ in arr[2][2] for _ in __))
-        else:
-            raise ParserError(f'无法解析: {arr}')
+    def parsePortal(guid: str, timestampMs: int, a: list) -> 'Portal':
+        return Portal(guid, *a)
+
+    @staticmethod
+    def parseLink(guid: str, timestampMs: int, a: list) -> 'Link':
+        return Link(guid, timestampMs, *a)
+
+    @staticmethod
+    def parseField(guid: str, timestampMs: int, a: list) -> 'Field':
+        return Field(guid, timestampMs, a[0], a[1], *(_ for __ in a[2] for _ in __))
+
+    parser = {
+        'p': 'parsePortal',
+        'e': 'parseLink',
+        'r': 'parseField',
+    }
+
+    @classmethod
+    def parseGameEntities(cls, guid: str, timestampMs: int, a: list) -> Union['Portal', 'Link', 'Field']:
+        try:
+            return getattr(cls, cls.parser[a[0]])(guid, timestampMs, a)
+        except KeyError:
+            raise ParserError(f'无法解析: {a}')
