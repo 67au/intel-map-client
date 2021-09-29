@@ -20,17 +20,17 @@
 
 ```python
 import asyncio
-from itertools import chain
 
 from IntelMapClient import AsyncClient, AsyncAPI
 from IntelMapClient.utils import MapTiles
 
+cookies = 'cookies'
+
 async def main():
-    cookies = 'cookies'
     async with AsyncClient.create_client(cookies) as client:
         maptiles = MapTiles.from_box(23.11, 113.23, 23.13, 113.28, zoom=15)
-        entities = await AsyncAPI.getEntitiesByTiles(client, maptiles)
-        portals = list(chain.from_iterable(i.portals for i in entities))
+        tile_container = await AsyncAPI.getEntitiesByTiles(client, maptiles)
+        portals = tile_container.portals()
         print(portals)
 
 if __name__ == '__main__':
