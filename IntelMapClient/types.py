@@ -1,7 +1,8 @@
 from datetime import datetime
+from collections import defaultdict
 from itertools import groupby, compress, chain
 from operator import attrgetter
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Iterator
 
 from IntelMapClient.utils import datetime2timestamp_ms, timestamp_ms2datetime
 
@@ -51,6 +52,30 @@ class Tile:
     @property
     def fields(self) -> List['Field']:
         return self._groups.get('r', [])
+
+
+class TileContainer:
+
+    def __init__(self, tiles: List['Tile'] = None):
+        self._tiles = defaultdict(Tile)
+        if tiles:
+            for t in tiles:
+                self._tiles[t.name] = t
+
+    def add(self, tile: 'Tile'):
+        self._tiles[tile.name] = tile
+
+    def remove(self, tile_name: str):
+        del self._tiles[tile_name]
+
+    def portals(self) -> Iterator['Portal']:
+        return chain.from_iterable(t.portals for t in self._tiles.values())
+
+    def links(self) -> Iterator['Link']:
+        return chain.from_iterable(t.links for t in self._tiles.values())
+
+    def fields(self) -> Iterator['Field']:
+        return chain.from_iterable(t.fields for t in self._tiles.values())
 
 
 class Portal(Entity):

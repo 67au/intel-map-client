@@ -6,7 +6,7 @@ from typing import Union, List, AsyncIterator, Tuple, Iterator
 
 from IntelMapClient.client import AsyncClient
 from IntelMapClient.errors import IncompleteError, ParserError, RequestError
-from IntelMapClient.types import Tile, Portal, Link, Field, Plext, Reward, Player
+from IntelMapClient.types import TileContainer, Tile, Portal, Link, Field, Plext, Reward, Player
 from IntelMapClient.utils import MapTiles, datetime2timestamp_ms
 
 
@@ -84,9 +84,9 @@ class AsyncAPI:
                                  client: 'AsyncClient',
                                  map_tiles: 'MapTiles',
                                  max_tries: int = 10,
-                                 ) -> List['Tile']:
+                                 ) -> TileContainer:
 
-        tile_output = list()
+        container = TileContainer()
         todo = map_tiles.tileKeys()
         tries = max_tries
         for _ in iter(lambda: any(todo) and tries > 0, False):
@@ -97,13 +97,13 @@ class AsyncAPI:
                 for k, v in (await task)['map'].items():
                     if 'gameEntities' in v:
                         entities = [cls.parseGameEntities(*i) for i in v['gameEntities']]
-                        tile_output.append(Tile(name=k, gameEntities=entities))
+                        container.add(Tile(name=k, gameEntities=entities))
                     else:
                         todo.append(k)
         if any(todo):
             cls.logger.error(f'无法获取 {map_tiles} 中全部 Tile 的数据')
             raise IncompleteError
-        return tile_output
+        return container
 
     @classmethod
     async def getPlextsByTiles(cls,
