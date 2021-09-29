@@ -25,7 +25,8 @@ class AsyncClient:
         'content-type': 'application/json; charset=UTF-8',
         'origin': 'https://intel.ingress.com',
         'referer': 'https://intel.ingress.com/intel',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.95 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/93.0.4577.82 Safari/537.36',
     }
     BASE_URL = 'https://intel.ingress.com'
 
