@@ -34,7 +34,7 @@ class AsyncClient:
         self._client: Optional['httpx.AsyncClient'] = None
         self.cookies: Optional[Dict[str, str]] = None
         self._transport: Optional['AsyncProxyTransport'] = None
-        self._sem: Optional['asyncio.Semaphore'] = None
+        self.sem: Optional['asyncio.Semaphore'] = None
         self._data = {}
         self.logger = logging.getLogger(__name__)
 
@@ -48,11 +48,11 @@ class AsyncClient:
         self = AsyncClient()
         self.cookies = cookies2dict(cookies)
         if proxy:
-            self._sem = asyncio.Semaphore(1)
+            self.sem = asyncio.Semaphore(1)
             self._transport = AsyncProxyTransport.from_url(proxy, retries=10)
             self.logger.info('如果使用代理，则连接数限制为1，详情查看 https://github.com/encode/httpcore/issues/335')
         else:
-            self._sem = asyncio.Semaphore(max_workers)
+            self.sem = asyncio.Semaphore(max_workers)
             self._transport = httpx.AsyncHTTPTransport(retries=10)
         self._client = httpx.AsyncClient(
             headers=self.headers,
@@ -96,7 +96,7 @@ class AsyncClient:
         if self._client is None:
             raise
         max_tries = 10
-        async with self._sem:
+        async with self.sem:
             content = json.dumps(data)
             for n in range(1, max_tries+2):
                 try:
