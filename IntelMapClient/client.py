@@ -38,7 +38,6 @@ class AsyncClient:
         self._data = {}
         self.logger = logging.getLogger(__name__)
 
-
     @classmethod
     async def create_client(cls,
                             cookies: str,
@@ -98,7 +97,7 @@ class AsyncClient:
         max_tries = 10
         async with self.sem:
             content = json.dumps(data)
-            for n in range(1, max_tries+2):
+            for n in range(1, max_tries+1):
                 try:
                     resp = await self._client.post(url=url, content=content)
                     resp.raise_for_status()
@@ -110,16 +109,19 @@ class AsyncClient:
                     elif 'error' in result:
                         raise ResultError(result['error'])
                     raise RequestError
-                except (httpx.HTTPStatusError, httpcore.ReadTimeout, httpx.ReadTimeout):
-                    if n > max_tries:
-                        self.logger.error(f'访问 {url} 返回错误，正在退出程序')
-                        raise ResultError('Retries limit reached.')
-                    else:
-                        self.logger.warning(f'访问 {url} 返回错误，第{n}次进行重试')
-                        await asyncio.sleep(0.2)
+                except (httpcore.ReadTimeout, httpx.ReadTimeout):
+                    pass
+                except httpx.HTTPStatusError:
+                    if resp.status_code == 400:
+                        raise RequestError
                 except json.decoder.JSONDecodeError:
-                    self.logger.error('cookies 可能已经过期')
+                    self.logger.error('cookies 可能已经过期.')
                     raise LoginError
+                if n < max_tries:
+                    self.logger.warning(f'第{n}次请求 {url} 返回错误，正在进行重试.')
+                    await asyncio.sleep(0.2)
+            self.logger.error(f'请求 {url} 的重试次数达到上限.')
+            raise ResultError('Retries limit reached.')
 
     async def getArtifactPortals(self):
         data = self._data
