@@ -4,10 +4,10 @@ from datetime import datetime
 import random
 from typing import Union, List, AsyncIterator, Tuple, Iterator
 
-from IntelMapClient.client import AsyncClient
-from IntelMapClient.errors import IncompleteError, ParserError, RequestError
-from IntelMapClient.types import TileContainer, Tile, Portal, Link, Field, Plext, Reward, Player
-from IntelMapClient.utils import MapTiles, datetime2timestamp_ms
+from .client import AsyncClient
+from .errors import IncompleteError, ParserError, RequestError
+from .types import TileContainer, Tile, Portal, Link, Field, Plext, Reward, Player
+from .utils import MapTiles, datetime2timestamp_ms
 
 
 class AsyncAPI:

@@ -9,7 +9,7 @@ import httpcore
 import httpx
 from httpx_socks import AsyncProxyTransport
 
-from IntelMapClient.errors import ResultError, LoginError, RequestError
+from .errors import ResultError, LoginError, RequestError
 
 
 def cookies2dict(cookies: str) -> Dict[str, str]:

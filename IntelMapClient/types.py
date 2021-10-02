@@ -4,7 +4,7 @@ from itertools import groupby, compress, chain
 from operator import attrgetter
 from typing import List, Union, Optional, Iterator
 
-from IntelMapClient.utils import datetime2timestamp_ms, timestamp_ms2datetime
+from .utils import datetime2timestamp_ms, timestamp_ms2datetime
 
 
 class Entity:
