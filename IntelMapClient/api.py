@@ -128,7 +128,7 @@ class AsyncAPI:
         )
         while any(plext):
             for p in plext:
-                yield cls.parsePlext(p)
+                yield Plext.parse(p)
             await asyncio.sleep(0)
             guid = plext[-1][0]
             maxTimestampMs = plext[-1][1]
@@ -143,31 +143,15 @@ class AsyncAPI:
                 tab=tab,
             )
 
-    @staticmethod
-    def parsePlext(arr: list):
-        return Plext(*arr)
-
-    @staticmethod
-    def parsePortal(guid: str, timestampMs: int, a: list) -> 'Portal':
-        return Portal(guid, *a)
-
-    @staticmethod
-    def parseLink(guid: str, timestampMs: int, a: list) -> 'Link':
-        return Link(guid, timestampMs, *a)
-
-    @staticmethod
-    def parseField(guid: str, timestampMs: int, a: list) -> 'Field':
-        return Field(guid, timestampMs, a[0], a[1], *(_ for __ in a[2] for _ in __))
-
     parser = {
-        'p': 'parsePortal',
-        'e': 'parseLink',
-        'r': 'parseField',
+        'p': Portal,
+        'e': Link,
+        'r': Field,
     }
 
     @classmethod
     def parseGameEntities(cls, guid: str, timestampMs: int, a: list) -> Union['Portal', 'Link', 'Field']:
         try:
-            return getattr(cls, cls.parser[a[0]])(guid, timestampMs, a)
+            return cls.parser[a[0]].parse(guid, timestampMs, a)
         except KeyError:
             raise ParserError(f'无法解析: {a}')

@@ -109,6 +109,10 @@ class Portal(Entity):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.guid}, {self._time}, \'{self.title}\')'
 
+    @classmethod
+    def parse(cls, guid: str, timestampMs: int, a: list) -> 'Portal':
+        return Portal(guid, *a)
+
 
 class Link(Entity):
 
@@ -134,6 +138,10 @@ class Link(Entity):
         self.p2_guid = p2_guid
         self.p2_latE6 = p2_latE6
         self.p2_lngE6 = p2_lngE6
+
+    @classmethod
+    def parse(cls, guid: str, timestampMs: int, a: list) -> 'Link':
+        return Link(guid, timestampMs, *a)
 
 
 class Field(Entity):
@@ -167,6 +175,10 @@ class Field(Entity):
         self.p3_latE6 = p3_latE6
         self.p3_lngE6 = p3_lngE6
 
+    @classmethod
+    def parse(cls, guid: str, timestampMs: int, a: list) -> 'Field':
+        return Field(guid, timestampMs, a[0], a[1], *(_ for __ in a[2] for _ in __))
+
 
 class Plext(Entity):
     """
@@ -188,6 +200,10 @@ class Plext(Entity):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.guid}, {self._time}, \'{self.text}\')'
+
+    @classmethod
+    def parse(cls, arr: list) -> 'Plext':
+        return Plext(*arr)
 
 
 class Reward:
