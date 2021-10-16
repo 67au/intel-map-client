@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import re
 import logging
 import time
@@ -38,6 +39,8 @@ class AsyncClient:
         self._data = {}
         self.logger = logging.getLogger(__name__)
 
+        self.connected = False
+
     @classmethod
     async def create_client(cls,
                             cookies: str,
@@ -45,6 +48,14 @@ class AsyncClient:
                             max_workers: int = 10
                             ) -> 'AsyncClient':
         self = AsyncClient()
+        await cls.connect(self, cookies, proxy, max_workers)
+        return self
+
+    async def connect(self, cookies: str, proxy: str = None, max_workers: int = 10):
+        if self.connected:
+            self.logger.error('已经登录成功')
+            raise LoginError('Already connected')
+
         self.cookies = cookies2dict(cookies)
         if proxy:
             self.sem = asyncio.Semaphore(1)
@@ -58,9 +69,12 @@ class AsyncClient:
             cookies=self.cookies,
             transport=self._transport,
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            timeout=httpx.Timeout(10.0, read=20.0)
         )
+
         await self._login()
-        return self
+
+        self.connected = True
 
     @staticmethod
     def cookies2dict(cookies: str) -> Dict[str, str]:
@@ -69,15 +83,14 @@ class AsyncClient:
 
     async def _login(self):
         resp = await self._client.get(f'{self.BASE_URL}/intel')
-        resp.raise_for_status()
         result = re.findall(r'/jsc/gen_dashboard_([\d\w]+)\.js"', resp.text)
         if len(result) == 1:
             self.logger.info('登录成功')
             self._data['v'] = result[0]
             self._client.headers.update({'x-csrftoken': resp.cookies['csrftoken']})
         else:
-            self.logger.error('cookies验证失败')
-            raise LoginError
+            self.logger.error('cookies 验证失败')
+            raise LoginError('Cookies error')
 
     async def __aenter__(self):
         return self
@@ -91,13 +104,13 @@ class AsyncClient:
     async def _request(self,
                        url: str,
                        data: dict,
-                       raw: bool = False) -> list:
-        if self._client is None:
-            raise
-        max_tries = 10
+                       raw: bool = False,
+                       max_retries: int = 5) -> list:
+        if not self.connected or self._client is None:
+            raise RequestError('Client not connected')
         async with self.sem:
             content = json.dumps(data)
-            for n in range(1, max_tries+1):
+            for n in range(1, max_retries+1):
                 try:
                     resp = await self._client.post(url=url, content=content)
                     resp.raise_for_status()
@@ -107,21 +120,22 @@ class AsyncClient:
                     if 'result' in result:
                         return result['result']
                     elif 'error' in result:
+                        self.logger.error(f"{url} 返回错误结果：{result['error']}")
                         raise ResultError(result['error'])
-                    raise RequestError
-                except (httpcore.ReadTimeout, httpx.ReadTimeout):
-                    pass
+                    raise ResultError('Illegal result')
                 except httpx.HTTPStatusError:
                     if resp.status_code == 400:
-                        raise RequestError
+                        raise RequestError('Bad request')
                 except json.decoder.JSONDecodeError:
                     self.logger.error('cookies 可能已经过期.')
-                    raise LoginError
-                if n < max_tries:
-                    self.logger.warning(f'第{n}次请求 {url} 返回错误，正在进行重试.')
-                    await asyncio.sleep(0.2)
+                    self.connected = False
+                    raise RequestError('Cookies may be expired')
+                if n < max_retries:
+                    delay_time = random.uniform(0.5, 2)
+                    self.logger.debug(f'第 {n} 次请求 {url} 返回错误，{delay_time:.2}s 后进行重试.')
+                    await asyncio.sleep(delay_time)
             self.logger.error(f'请求 {url} 的重试次数达到上限.')
-            raise ResultError('Retries limit reached.')
+            raise RequestError('Retries limit reached')
 
     async def getArtifactPortals(self):
         data = self._data
