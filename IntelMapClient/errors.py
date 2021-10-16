@@ -7,10 +7,9 @@ class ResultError(Error):
 
 
 class RequestError(Error):
-    pass
-
-
-class IncompleteError(ResultError):
+    """
+    Bad Request
+    """
     pass
 
 

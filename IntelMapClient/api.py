@@ -2,10 +2,10 @@ import asyncio
 import logging
 from datetime import datetime
 import random
-from typing import Union, List, AsyncIterator, Tuple, Iterator
+from typing import Union, AsyncIterator, Tuple, Iterator
 
 from .client import AsyncClient
-from .errors import IncompleteError, ParserError, RequestError
+from .errors import ParserError, RequestError, ResultError
 from .types import TileContainer, Tile, Portal, Link, Field, Plext, Reward, Player
 from .utils import MapTiles, datetime2timestamp_ms
 
@@ -76,23 +76,22 @@ class AsyncAPI:
                 cls.logger.warning(f'Portal({guid}) 请求失败，{t}秒后重试')
                 await asyncio.sleep(t)
         cls.logger.error(f'无法获取 Portal({guid}) 数据')
-        raise IncompleteError
-
+        raise ResultError
 
     @classmethod
     async def getEntitiesByTiles(cls,
                                  client: 'AsyncClient',
                                  map_tiles: 'MapTiles',
-                                 max_tries: int = 10,
+                                 max_retries: int = 10,
                                  ) -> TileContainer:
 
         container = TileContainer()
         todo = map_tiles.tileKeys()
-        tries = max_tries
-        for _ in iter(lambda: any(todo) and tries > 0, False):
+        retries = max_retries
+        for _ in iter(lambda: any(todo) and retries > 0, False):
             tasks = [asyncio.create_task(client.getEntities(todo[k:k + 5])) for k in range(0, len(todo), 5)]
             todo = []
-            tries -= 1
+            retries -= 1
             for task in asyncio.as_completed(tasks):
                 for k, v in (await task)['map'].items():
                     if 'gameEntities' in v:
@@ -102,7 +101,7 @@ class AsyncAPI:
                         todo.append(k)
         if any(todo):
             cls.logger.error(f'无法获取 {map_tiles} 中全部 Tile 的数据')
-            raise IncompleteError
+            raise ResultError
         return container
 
     @classmethod
