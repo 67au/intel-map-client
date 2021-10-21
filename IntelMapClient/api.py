@@ -111,6 +111,7 @@ class AsyncAPI:
                                start: Union['datetime', int] = -1,
                                end: Union['datetime', int] = -1,
                                tab: str = 'all',
+                               reverse: bool = False,
                                ) -> AsyncIterator['Plext']:
         if tab not in {'all', 'faction', 'alerts'}:
             raise ParserError(f'"{tab}" not in ["all", "faction", "alerts"]')
@@ -124,13 +125,17 @@ class AsyncAPI:
             minTimestampMs=minTimestampMs,
             maxTimestampMs=maxTimestampMs,
             tab=tab,
+            ascendingTimestampOrder=reverse,
         )
         while any(plext):
             for p in plext:
                 yield Plext.parse(p)
             await asyncio.sleep(0)
             guid = plext[-1][0]
-            maxTimestampMs = plext[-1][1]
+            if reverse:
+                minTimestampMs = plext[-1][1]
+            else:
+                maxTimestampMs = plext[-1][1]
             plext = await client.getPlexts(
                 minLatE6=map_tiles.minLatE6,
                 maxLatE6=map_tiles.maxLatE6,
@@ -140,6 +145,7 @@ class AsyncAPI:
                 maxTimestampMs=maxTimestampMs,
                 plextContinuationGuid=guid,
                 tab=tab,
+                ascendingTimestampOrder=reverse,
             )
 
     parser = {
