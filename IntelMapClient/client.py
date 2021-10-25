@@ -6,7 +6,6 @@ import logging
 import time
 from typing import List, Dict, Optional
 
-import httpcore
 import httpx
 from httpx_socks import AsyncProxyTransport
 
@@ -96,10 +95,11 @@ class AsyncClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self._client.aclose()
+        await self.close()
 
     async def close(self):
         await self._client.aclose()
+        self.connected = False
 
     async def _request(self,
                        url: str,
