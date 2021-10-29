@@ -11,6 +11,8 @@ from httpx_socks import AsyncProxyTransport
 
 from .errors import ResultError, LoginError, RequestError
 
+logger = logging.getLogger(__name__)
+
 
 def cookies2dict(cookies: str) -> Dict[str, str]:
     cookies_dict = {k.strip(): v for k, v in re.findall(r'(.*?)=(.*?);', f'{cookies};')}
@@ -36,8 +38,6 @@ class AsyncClient:
         self._transport: Optional['AsyncProxyTransport'] = None
         self.sem: Optional['asyncio.Semaphore'] = None
         self._data = {}
-        self.logger = logging.getLogger(__name__)
-
         self.connected = False
 
     @classmethod
@@ -52,14 +52,14 @@ class AsyncClient:
 
     async def connect(self, cookies: str, proxy: str = None, max_workers: int = 10):
         if self.connected:
-            self.logger.error('已经登录成功')
-            raise LoginError('Already connected')
+            logger.error('已经登录成功')
+            return
 
         self.cookies = cookies2dict(cookies)
         if proxy:
             self.sem = asyncio.Semaphore(1)
             self._transport = AsyncProxyTransport.from_url(proxy, retries=10)
-            self.logger.info('如果使用代理，则连接数限制为1，详情查看 https://github.com/encode/httpcore/issues/335')
+            logger.info('如果使用代理，则连接数限制为1，详情查看 https://github.com/encode/httpcore/issues/335')
         else:
             self.sem = asyncio.Semaphore(max_workers)
             self._transport = httpx.AsyncHTTPTransport(retries=10)
@@ -84,11 +84,11 @@ class AsyncClient:
         resp = await self._client.get(f'{self.BASE_URL}/intel')
         result = re.findall(r'/jsc/gen_dashboard_([\d\w]+)\.js"', resp.text)
         if len(result) == 1:
-            self.logger.info('登录成功')
+            logger.info('登录成功')
             self._data['v'] = result[0]
             self._client.headers.update({'x-csrftoken': resp.cookies['csrftoken']})
         else:
-            self.logger.error('cookies 验证失败')
+            logger.error('cookies 验证失败')
             raise LoginError('Cookies error')
 
     async def __aenter__(self):
@@ -120,21 +120,21 @@ class AsyncClient:
                     if 'result' in result:
                         return result['result']
                     elif 'error' in result:
-                        self.logger.error(f"{url} 返回错误结果：{result['error']}")
+                        logger.error(f"{url} 返回错误结果：{result['error']}")
                         raise ResultError(result['error'])
                     raise ResultError('Illegal result')
                 except httpx.HTTPStatusError:
                     if resp.status_code == 400:
                         raise RequestError('Bad request')
                 except json.decoder.JSONDecodeError:
-                    self.logger.error('cookies 可能已经过期.')
+                    logger.error('cookies 可能已经过期.')
                     self.connected = False
                     raise RequestError('Cookies may be expired')
                 if n < max_retries:
                     delay_time = random.uniform(0.5, 2)
-                    self.logger.debug(f'第 {n} 次请求 {url} 返回错误，{delay_time:.2}s 后进行重试.')
+                    logger.debug(f'第 {n} 次请求 {url} 返回错误，{delay_time:.2}s 后进行重试.')
                     await asyncio.sleep(delay_time)
-            self.logger.error(f'请求 {url} 的重试次数达到上限.')
+            logger.error(f'请求 {url} 的重试次数达到上限.')
             raise RequestError('Retries limit reached')
 
     async def getArtifactPortals(self):
