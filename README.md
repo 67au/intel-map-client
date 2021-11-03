@@ -28,8 +28,9 @@ cookies = 'cookies'
 
 async def main():
     async with AsyncClient.create_client(cookies) as client:
+        api = AsyncAPI(client)
         maptiles = MapTiles.from_box(23.11, 113.23, 23.13, 113.28, zoom=15)
-        tile_container = await AsyncAPI.getEntitiesByTiles(client, maptiles)
+        tile_container = await api.getEntitiesByTiles(client, maptiles)
         portals = tile_container.portals()
         print(portals)
 
