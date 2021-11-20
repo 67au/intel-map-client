@@ -17,7 +17,7 @@ class AsyncAPI:
     def __init__(self, client: 'AsyncClient'):
         self.client = client
 
-    async def updatePortals(self,
+    async def updateMultiPortals(self,
                             portals: Iterator['Portal'],
                             ) -> AsyncIterator['Portal']:
         lock = asyncio.Lock()
