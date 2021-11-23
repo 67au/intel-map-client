@@ -9,14 +9,11 @@ from typing import List, Dict, Optional
 import httpx
 from httpx_socks import AsyncProxyTransport
 
-from .errors import ResultError, LoginError, RequestError
+from .errors import ResponseError, CookieError, RequestError
 
 logger = logging.getLogger(__name__)
 
-
-def cookies2dict(cookies: str) -> Dict[str, str]:
-    cookies_dict = {k.strip(): v for k, v in re.findall(r'(.*?)=(.*?);', f'{cookies};')}
-    return cookies_dict
+MAX_WORKERS = 10
 
 
 class AsyncClient:
@@ -28,17 +25,18 @@ class AsyncClient:
         'origin': 'https://intel.ingress.com',
         'referer': 'https://intel.ingress.com/intel',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                      'Chrome/93.0.4577.82 Safari/537.36',
+                      'Chrome/96.0.4664.45 Safari/537.36',
     }
     BASE_URL = 'https://intel.ingress.com'
 
-    def __init__(self):
+    def __init__(self, cookies: str = None, proxy: str = None, max_workers: int = MAX_WORKERS):
         self._client: Optional['httpx.AsyncClient'] = None
-        self.cookies: Optional[Dict[str, str]] = None
-        self._transport: Optional['AsyncProxyTransport'] = None
-        self.sem: Optional['asyncio.Semaphore'] = None
+        self._cookies: Optional[str] = cookies
+        self._transport: Optional['AsyncProxyTransport'] = proxy
+        self._sem: Optional['asyncio.Semaphore'] = asyncio.Semaphore(max_workers)
         self._data = {}
-        self.connected = False
+        self._login_event = asyncio.Event()
+        self._login_lock = asyncio.Lock()
 
     @classmethod
     async def create_client(cls,
@@ -50,30 +48,30 @@ class AsyncClient:
         await cls.connect(self, cookies, proxy, max_workers)
         return self
 
-    async def connect(self, cookies: str, proxy: str = None, max_workers: int = 10):
-        if self.connected:
-            logger.error('已经登录成功')
-            return
+    @property
+    def isBusy(self) -> bool:
+        return self._sem.locked()
 
-        self.cookies = cookies2dict(cookies)
+    def _update_client(self, cookies: str = None, proxy: str = None, max_workers: int = MAX_WORKERS):
+        self._cookies = cookies or self._cookies
         if proxy:
-            self.sem = asyncio.Semaphore(1)
+            self._sem = asyncio.Semaphore(1)
             self._transport = AsyncProxyTransport.from_url(proxy, retries=10)
             logger.info('如果使用代理，则连接数限制为1，详情查看 https://github.com/encode/httpcore/issues/335')
         else:
-            self.sem = asyncio.Semaphore(max_workers)
+            self._sem = asyncio.Semaphore(max_workers) if isinstance(max_workers, int) else self._sem
             self._transport = httpx.AsyncHTTPTransport(retries=10)
         self._client = httpx.AsyncClient(
             headers=self.headers,
-            cookies=self.cookies,
+            cookies=self.cookies2dict(self._cookies),
             transport=self._transport,
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
             timeout=httpx.Timeout(10.0, read=20.0)
         )
 
+    async def connect(self, cookies: str, proxy: str = None, max_workers: int = None):
+        self._update_client(cookies, proxy, max_workers)
         await self._login()
-
-        self.connected = True
 
     @staticmethod
     def cookies2dict(cookies: str) -> Dict[str, str]:
@@ -81,15 +79,22 @@ class AsyncClient:
         return cookies_dict
 
     async def _login(self):
-        resp = await self._client.get(f'{self.BASE_URL}/intel')
-        result = re.findall(r'/jsc/gen_dashboard_([\d\w]+)\.js"', resp.text)
-        if len(result) == 1:
-            logger.info('登录成功')
-            self._data['v'] = result[0]
-            self._client.headers.update({'x-csrftoken': resp.cookies['csrftoken']})
-        else:
-            logger.error('cookies 验证失败')
-            raise LoginError('Cookies error')
+        if self._login_lock.locked():
+            return
+        async with self._login_lock:
+            if self._client is None:
+                self._update_client()
+            resp = await self._client.get(f'{self.BASE_URL}/intel')
+            result = re.findall(r'/jsc/gen_dashboard_([\d\w]+)\.js"', resp.text)
+            if len(result) == 1:
+                logger.info('Intel Map 登录成功')
+                self._data['v'] = result[0]
+                self._client.headers.update({'x-csrftoken': resp.cookies['csrftoken']})
+                self._login_event.set()
+            else:
+                logger.error('Cookies 验证失败')
+                await self.close()
+                raise CookieError('Login failed')
 
     async def __aenter__(self):
         return self
@@ -99,17 +104,19 @@ class AsyncClient:
 
     async def close(self):
         await self._client.aclose()
-        self.connected = False
+        self._login_event.clear()
+        self._client = None
 
     async def _request(self,
                        url: str,
                        data: dict,
                        raw: bool = False,
                        max_retries: int = 5) -> list:
-        if not self.connected or self._client is None:
-            raise RequestError('Client not connected')
-        async with self.sem:
-            content = json.dumps(data)
+        if self._client is None:
+            await asyncio.create_task(self._login())
+        async with self._sem:
+            await self._login_event.wait()
+            content = json.dumps({**self._data, **data})
             for n in range(1, max_retries+1):
                 try:
                     resp = await self._client.post(url=url, content=content)
@@ -119,16 +126,16 @@ class AsyncClient:
                         return result
                     if 'result' in result:
                         return result['result']
-                    elif 'error' in result:
+                    if 'error' in result:
                         logger.error(f"{url} 返回错误结果：{result['error']}")
-                        raise ResultError(result['error'])
-                    raise ResultError('Illegal result')
+                        raise ResponseError(result['error'])
+                    raise ResponseError('Bad Response')
                 except httpx.HTTPStatusError:
                     if resp.status_code == 400:
                         raise RequestError('Bad request')
                 except json.decoder.JSONDecodeError:
                     logger.error('cookies 可能已经过期.')
-                    self.connected = False
+                    await self.close()
                     raise RequestError('Cookies may be expired')
                 if n < max_retries:
                     delay_time = random.uniform(0.5, 2)
@@ -138,22 +145,22 @@ class AsyncClient:
             raise RequestError('Retries limit reached')
 
     async def getArtifactPortals(self):
-        data = self._data
+        data = dict()
         url = f'{self.BASE_URL}/r/getArtifactPortals'
         return await self._request(url=url, data=data)
 
     async def getGameScore(self):
-        data = self._data
+        data = dict()
         url = f'{self.BASE_URL}/r/getGameScore'
         return await self._request(url=url, data=data)
 
     async def getEntities(self, tileKeys: List[str]):
-        data = dict(self._data, tileKeys=tileKeys)
+        data = dict(tileKeys=tileKeys)
         url = f'{self.BASE_URL}/r/getEntities'
         return await self._request(url=url, data=data)
 
     async def getPortalDetails(self, guid: str):
-        data = dict(self._data, guid=guid)
+        data = dict(guid=guid)
         url = f'{self.BASE_URL}/r/getPortalDetails'
         return await self._request(url=url, data=data)
 
@@ -170,7 +177,6 @@ class AsyncClient:
         # tab: 'all', 'faction', 'alerts'
         minTimestampMs = int(time.time() * 1000) if minTimestampMs == 0 else minTimestampMs
         data = dict(
-            self._data,
             ascendingTimestampOrder=ascendingTimestampOrder,
             maxLatE6=maxLatE6,
             maxLngE6=maxLngE6,
@@ -191,7 +197,6 @@ class AsyncClient:
                         tab: str = 'faction'):
         # tab: 'all', 'faction'
         data = dict(
-            self._data,
             latE6=latE6,
             lngE6=lngE6,
             message=message,
@@ -204,7 +209,6 @@ class AsyncClient:
                                     lngE6: int,
                                     latE6: int):
         data = dict(
-            self._data,
             latE6=latE6,
             lngE6=lngE6
         )
@@ -213,14 +217,13 @@ class AsyncClient:
 
     async def redeemReward(self, passcode: str):
         data = dict(
-            self._data,
             passcode=passcode
         )
         url = f'{self.BASE_URL}/r/redeemReward'
         return await self._request(url=url, data=data, raw=True)
 
     async def getHasActiveSubscription(self):
-        data = self._data
+        data = dict()
         url = f'{self.BASE_URL}/r/getHasActiveSubscription'
         return await self._request(url=url, data=data)
 
@@ -230,7 +233,6 @@ class AsyncClient:
                                      southE6: int,
                                      northE6: int):
         data = dict(
-            self._data,
             eastE6=eastE6,
             westE6=westE6,
             southE6=southE6,
@@ -240,17 +242,11 @@ class AsyncClient:
         return await self._request(url=url, data=data)
 
     async def getMissionDetails(self, guid: str):
-        data = dict(
-            self._data,
-            guid=guid
-        )
+        data = dict(guid=guid)
         url = f'{self.BASE_URL}/r/getMissionDetails'
         return await self._request(url=url, data=data)
 
     async def getTopMissionsForPortal(self, guid: str):
-        data = dict(
-            self._data,
-            guid=guid
-        )
+        data = dict(guid=guid)
         url = f'{self.BASE_URL}/r/getTopMissionsForPortal'
         return await self._request(url=url, data=data)
