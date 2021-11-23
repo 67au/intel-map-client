@@ -27,12 +27,12 @@ from IntelMapClient.utils import MapTiles
 cookies = 'cookies'
 
 async def main():
-    async with AsyncClient.create_client(cookies) as client:
+    async with AsyncClient(cookies) as client:
         api = AsyncAPI(client)
         maptiles = MapTiles.from_box(23.11, 113.23, 23.13, 113.28, zoom=15)
         tile_container = await api.getEntitiesByTiles(client, maptiles)
         portals = tile_container.portals()
-        print(portals)
+        print(list(portals))
 
 if __name__ == '__main__':
     asyncio.run(main())
