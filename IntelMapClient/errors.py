@@ -2,7 +2,10 @@ class Error(Exception):
     pass
 
 
-class ResultError(Error):
+class ResponseError(Error):
+    """
+    Bad Response
+    """
     pass
 
 
@@ -17,5 +20,9 @@ class ParserError(Error):
     pass
 
 
-class LoginError(Error):
+class CommTabError(Error):
+    pass
+
+
+class CookieError(Error):
     pass
