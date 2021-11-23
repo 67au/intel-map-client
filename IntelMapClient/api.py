@@ -1,15 +1,22 @@
 import asyncio
+import heapq
 import logging
-from datetime import datetime
+import math
 import random
-from typing import Union, AsyncIterator, Tuple, Iterator
+from datetime import datetime
+from typing import Union, AsyncIterator, Tuple, Iterator, Awaitable, Any
 
 from .client import AsyncClient
-from .errors import ParserError, RequestError, ResultError
+from .errors import ParserError, RequestError, ResponseError, CommTabError
 from .types import TileContainer, Tile, Portal, Link, Field, Plext, Reward, Player
 from .utils import MapTiles, datetime2timestamp_ms
 
 logger = logging.getLogger(__name__)
+
+
+async def with_lock(coro: Awaitable, lock: asyncio.Lock) -> Any:
+    async with lock:
+        return await coro
 
 
 class AsyncAPI:
@@ -17,22 +24,40 @@ class AsyncAPI:
     def __init__(self, client: 'AsyncClient'):
         self.client = client
 
-    async def updateMultiPortals(self,
-                            portals: Iterator['Portal'],
-                            ) -> AsyncIterator['Portal']:
+    async def searchPortalByLatLng(self,
+                                   lat: float,
+                                   lng: float,
+                                   output_limit: int = 3,
+                                   ) -> list[tuple[Portal, float]]:
+        latE6, lngE6 = int(lat * 1e6), int(lng * 1e6)
+        map_tiles = MapTiles.from_square(lat, lng, 0, zoom=15)
+        container = await self.getEntitiesByTiles(map_tiles)
+        return heapq.nsmallest(
+            output_limit,
+            ((p, math.pow(p.latE6 - latE6, 2) + math.pow(p.lngE6 - lngE6, 2)) for p in container.portals()),
+            key=lambda k: k[1]
+        )
+
+    async def PortalDetailsIterator(self,
+                                    portals: Iterator[Union['Portal', str]],
+                                    ordered: bool = False,
+                                    ) -> AsyncIterator['Portal']:
         lock = asyncio.Lock()
-
-        async def with_lock(coro):
-            async with lock:
-                await asyncio.sleep(0)
-                return await coro
-
-        tasks = [asyncio.create_task(with_lock(self.getPortalByGUID(p.guid))) for p in portals]
-        for task in asyncio.as_completed(tasks):
-            yield await task
+        tasks = [
+            asyncio.create_task(
+                with_lock(self.getPortalByGUID(p.guid if isinstance(p, Portal) else p), lock)
+            ) for p in portals
+        ]
+        if ordered:
+            for task in tasks:
+                yield await task
+        else:
+            for task in asyncio.as_completed(tasks):
+                yield await task
 
     async def redeemReward(self,
-                           passcode: 'str') -> Tuple[bool, Union[Tuple['Reward', 'Player'], str]]:
+                           passcode: 'str'
+                           ) -> Tuple[bool, Union[Tuple['Reward', 'Player'], str]]:
         result = await self.client.redeemReward(passcode)
         if 'error' in result:
             logger.error(f"兑换物资失败: {result['error']}")
@@ -44,9 +69,10 @@ class AsyncAPI:
                                 lat: float,
                                 lng: float,
                                 message: str,
-                                tab: 'str' = 'faction') -> bool:
+                                tab: 'str' = 'faction'
+                                ) -> bool:
         if tab not in {'all', 'faction'}:
-            raise ParserError(f'"{tab}" not in ["all", "faction"]')
+            raise CommTabError(f'"{tab}" not in ["all", "faction"]')
         result = await self.client.sendPlext(
             latE6=int(lat * 1e6),
             lngE6=int(lng * 1e6),
@@ -66,16 +92,15 @@ class AsyncAPI:
             except RequestError:
                 max_retries -= 1
                 t = random.randint(2, 4)
-                logger.warning(f'Portal({guid}) 请求失败，{t}秒后重试')
+                logger.warning(f'Portal({guid}) 请求失败， {t}s 后重试')
                 await asyncio.sleep(t)
         logger.error(f'无法获取 Portal({guid}) 数据')
-        raise ResultError
+        raise ResponseError('Retries limit reached')
 
     async def getEntitiesByTiles(self,
                                  map_tiles: 'MapTiles',
                                  max_retries: int = 10,
                                  ) -> TileContainer:
-
         container = TileContainer()
         todo = map_tiles.tileKeys()
         retries = max_retries
@@ -92,7 +117,7 @@ class AsyncAPI:
                         todo.append(k)
         if any(todo):
             logger.error(f'无法获取 {map_tiles} 中全部 Tile 的数据')
-            raise ResultError
+            raise ResponseError('Get incomplete tile data')
         return container
 
     async def getPlextsByTiles(self,
@@ -146,4 +171,4 @@ class AsyncAPI:
         try:
             return parser[a[0]].parse(guid, timestampMs, a)
         except KeyError:
-            raise ParserError(f'无法解析: {a}')
+            raise ParserError(f'Failed to parse: {a}')
