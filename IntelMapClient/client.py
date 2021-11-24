@@ -103,9 +103,10 @@ class AsyncClient:
         await self.close()
 
     async def close(self):
-        await self._client.aclose()
         self._login_event.clear()
-        self._client = None
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def _request(self,
                        url: str,
