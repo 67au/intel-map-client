@@ -48,8 +48,10 @@ class AsyncClient:
         await cls.connect(self, cookies, proxy, max_workers)
         return self
 
-    @property
-    def isBusy(self) -> bool:
+    def is_login(self) -> bool:
+        return self._client is not None
+
+    def is_busy(self) -> bool:
         return self._sem.locked()
 
     def _update_client(self, cookies: str = None, proxy: str = None, max_workers: int = MAX_WORKERS):
