@@ -72,6 +72,7 @@ class AsyncClient:
         )
 
     async def connect(self, cookies: str, proxy: str = None, max_workers: int = None):
+        await self.close()
         self._update_client(cookies, proxy, max_workers)
         await self._login()
 
@@ -106,6 +107,7 @@ class AsyncClient:
 
     async def close(self):
         self._login_event.clear()
+        self._cookies = None
         if self._client is not None:
             await self._client.aclose()
             self._client = None
