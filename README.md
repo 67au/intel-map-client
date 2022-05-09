@@ -1,5 +1,8 @@
 # IntelMapClient
 
+![PyPI](https://img.shields.io/pypi/v/intel-map-client)
+![GitHub](https://img.shields.io/github/license/67au/intel-map-client)
+
 一个用于访问 intel.ingress.com 的 API 客户端
 
 ## Feature
