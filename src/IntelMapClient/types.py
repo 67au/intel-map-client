@@ -181,6 +181,26 @@ class Field(GameEntity):
         return self
 
 
+class Plext(GameEntity):
+
+    def __init__(self,
+                 guid: str,
+                 timestampMs: int,
+                 plext: dict,
+                 ):
+        super().__init__(guid, timestampMs)
+        self.text = plext['plext'].get('text')
+        self.team = plext['plext'].get('team')
+        self.markup = plext['plext'].get('markup')
+        self.plextType = plext['plext'].get('plextType')
+        self.categories = plext['plext'].get('categories')
+
+    @classmethod
+    def parse(cls, data: list):
+        self = cls(data[0], data[1], data[2])
+        return self
+
+
 class Tile:
 
     def __init__(self,
