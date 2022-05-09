@@ -144,7 +144,7 @@ class AsyncClient:
                     return result
                 except httpx.HTTPStatusError:
                     if resp.status_code == 400:
-                        raise RequestError('Request body maybe too large')
+                        raise RequestError('Bad Request')
                 except json.decoder.JSONDecodeError:
                     raise CookiesError('Cookies may be expired')
                 finally:
