@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+# [project]
+# name = "IntelMapClient"
+# version = "0.1.0"
+# description = "An API client for Intel Map"
+# readme = "README.md"
+# requires-python = ">=3.7"
+# keywords = ["intelmap"]
+# license = {file = "LICENSE"}
+# maintainers = [
+#   {name = "67au", email = "oyy6745@gmail.com"},
+# ]
+# classifiers = [
+#   "Programming Language :: Python",
+# ]
+# dependencies = [
+#   "httpx",
+#   "httpx-socks[asyncio]",
+# ]
+#
+# [project.urls]
+# homepage = "https://github.com/67au/intel-map-client"
+# repository = "https://github.com/67au/intel-map-client"
