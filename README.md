@@ -16,10 +16,8 @@
 
 ## Installation
 
-在推送 pypi 前请使用下面方式安装
-
 ```shell
-pip install https://github.com/67au/intel-map-client/archive/refs/tags/0.1.0.zip
+pip install intel-map-client
 ```
 
 ## Usage
