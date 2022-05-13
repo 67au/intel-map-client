@@ -122,6 +122,11 @@ class Portal(GameEntity, PortalCore):
         self = cls(data[0], data[1], *data[2])
         return self
 
+    @classmethod
+    def parse_detail(cls, guid: str, detail: list):
+        self = cls(guid, detail[14], *detail)
+        return self
+
 
 class Link(GameEntity):
     __slots__ = ['type', 'team', 'portal1', 'portal2']

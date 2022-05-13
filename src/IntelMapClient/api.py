@@ -31,6 +31,16 @@ class AsyncAPI:
             key=lambda k: k[1]
         )
 
+    async def GetPortalByLatLng(self,
+                                lat: float,
+                                lng: float,
+                                ) -> Union[Portal, None]:
+        result = await self.SearchPortalByLatLng(lat, lng, output_limit=1)
+        if any(result):
+            return result.pop()[0]
+        else:
+            return None
+
     async def GetEntitiesByMapTiles(self,
                                     map_tiles: MapTiles,
                                     chunk_size: int = 5,
@@ -120,3 +130,9 @@ class AsyncAPI:
                 plextContinuationGuid=last_plext.guid,
             )
             plexts = resp.data
+
+    async def GetPortalDetails(self,
+                               guid: str,
+                               ):
+        result = await self.client.getPortalDetails(guid)
+        return Portal.parse_detail(guid, result.data)
