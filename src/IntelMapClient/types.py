@@ -341,10 +341,10 @@ class TileSet:
     def portals(self) -> Iterator[Portal]:
         return chain.from_iterable(t.portals for t in self._tiles.values())
 
-    def links(self) -> Iterator[Portal]:
+    def links(self) -> Iterator[Link]:
         return chain.from_iterable(t.links for t in self._tiles.values())
 
-    def fields(self) -> Iterator[Portal]:
+    def fields(self) -> Iterator[Field]:
         return chain.from_iterable(t.fields for t in self._tiles.values())
 
     @classmethod
