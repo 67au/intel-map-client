@@ -3,7 +3,7 @@ import heapq
 import logging
 import math
 from datetime import datetime
-from typing import Union
+from typing import Union, Tuple, List
 
 from .client import AsyncClient
 from .errors import RequestError
@@ -21,7 +21,7 @@ class AsyncAPI:
                                    lat: float,
                                    lng: float,
                                    output_limit: int = 3,
-                                   ) -> list[tuple[Portal, float]]:
+                                   ) -> List[Tuple[Portal, float]]:
         latE6, lngE6 = int(lat * 1e6), int(lng * 1e6)
         maptiles = MapTiles.from_square(lat, lng, 0, zoom=15)
         tileset = await self.GetEntitiesByMapTiles(maptiles)

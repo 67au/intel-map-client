@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import groupby, product, chain
-from typing import Union, Iterator
+from typing import Union, Iterator, List
 
 from .utils import *
 
@@ -243,7 +243,7 @@ class MapTiles:
                  min_lng: float,
                  max_lng: float,
                  zoom: int,
-                 tiles: list[tuple]):
+                 tiles: List[tuple]):
         self.min_lat = min_lat
         self.max_lat = max_lat
         self.min_lng = min_lng
@@ -251,7 +251,7 @@ class MapTiles:
         self.zoom = zoom
         self.tiles = tiles
 
-    def tileKeys(self) -> list[str]:
+    def tileKeys(self) -> List[str]:
         return [f'{self.zoom}_{x}_{y}_0_8_100' for x, y in self.tiles]
 
     @property
@@ -322,7 +322,7 @@ class TileSet:
 
     def __init__(self,
                  map_tiles: MapTiles,
-                 tiles: list[Tile],
+                 tiles: List[Tile],
                  errors: Union[list, None] = None):
         self.map_tiles = map_tiles
         self._tiles = defaultdict(Tile)

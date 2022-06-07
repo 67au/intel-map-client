@@ -5,7 +5,7 @@ import random
 import re
 import time
 from http.cookies import SimpleCookie
-from typing import Union
+from typing import Union, List
 
 import httpx
 from httpx_socks import AsyncProxyTransport
@@ -159,7 +159,7 @@ class AsyncClient:
         data = {}
         return await self.request(method='getGameScore', data=data)
 
-    async def getEntities(self, tileKeys: list[str]):
+    async def getEntities(self, tileKeys: List[str]):
         data = {'tileKeys': tileKeys}
         return await self.request(method='getEntities', data=data)
 
