@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import groupby, product, chain
-from typing import Union, Iterator, List
+from typing import Union, Iterator, List, Tuple
 
 from .utils import *
 
@@ -296,8 +296,8 @@ class MapTiles:
 
     @classmethod
     def from_range(cls,
-                   lat_range: tuple[float, float],
-                   lng_range: tuple[float, float],
+                   lat_range: Tuple[float, float],
+                   lng_range: Tuple[float, float],
                    zoom: int = 15
                    ) -> 'MapTiles':
         minLat, maxLat = lat_range
